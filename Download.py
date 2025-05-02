@@ -1,9 +1,11 @@
 import yt_dlp
-from youtubesearchpython import VideosSearch
 import os
 import csv
+from googleapiclient.discovery import build
 
 def SearchVideos():
+    youtube_api_key = ''
+    youtube = build('youtube', 'v3', developerKey=youtube_api_key)
     urls = []
     with open("songs.csv", "r") as file:
         reader = csv.reader(file)
@@ -11,32 +13,41 @@ def SearchVideos():
         next(reader)
         
         for row in reader:
-            song_title = row[0].strip()
-            print(f"Searching for: {song_title}")
-        
-            search_query = song_title
-            
-            # Perform the video search
-            videossearch = VideosSearch(search_query, limit=4)
-            results = videossearch.result()['result']
-            
-            # Loop through the search results
-            official_audio_found = False
+            query = row[0].strip()
+            print(f"Searching for: {query}")    
 
-            for video in results:
-                if "Official Audio" in video['title']:
-                    url = video['link']
-                    print(url)
-                    official_audio_found = True
-                    urls.append(url)
-                    break  # Stop looking for other official audios if one is found
+            request = youtube.search().list(
+                q=query,
+                part="snippet",
+                type="video",
+                maxResults=5
+            )
 
-            if not official_audio_found and results:
-                url = results[0]['link']
-                urls.append(url)
+            response = request.execute()
 
-    print(urls)
+            found = False
+            for item in response.get("items", []):
+                title = item['snippet']['title'].lower()
+                if "lyrics" in title and "music video" not in title:
+                    video_id = item['id']['videoId']
+                    video_url = f"https://www.youtube.com/watch?v={video_id}"
+                    urls.append(video_url)
+                    print(f"Found: {video_url}")
+                    found = True
+                    break
+
+            # Fallback if nothing matched
+            if not found and response.get("items"):
+                fallback_id = response["items"][0]["id"]["videoId"]
+                fallback_url = f"https://www.youtube.com/watch?v={fallback_id}"
+                urls.append(fallback_url)
+                print(f"Fallback: {fallback_url}")
+
+    print("Final URLs:", urls)
     return urls
+                
+
+
 
 def DownloadVideos(urls, download_path):
     print("Now Downloading")
